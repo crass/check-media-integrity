@@ -22,12 +22,12 @@ In the case you know ways to instruct Pillow, Wand and FFmpeg to be stricter whe
 ```
 usage: check_mi.py [-h] [-c X] [-v] [-r] [-z Z] [-i] [-m] [-p] [-e] [-x E]
                    [-l L] [-t T] [-T K]
-                   P
+                   PATH [PATH ...]
 
 Checks integrity of Media files (Images, Video, Audio).
 
 positional arguments:
-  P                     path to the file or folder
+  PATH                  path to the file or folder
 
 optional arguments:
   -h, --help            show this help message and exit

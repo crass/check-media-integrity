@@ -15,6 +15,7 @@ __status__ = "Beta"
 import sys
 import os
 import time
+import itertools
 import PIL
 from PIL import Image as ImageP
 from wand.image import Image as ImageW
@@ -78,7 +79,7 @@ def arg_parser():
 
     parser = argparse.ArgumentParser(description='Checks integrity of Media files (Images, Video, Audio).',
                                      epilog=epilog_details, formatter_class=MultilineFormatter)
-    parser.add_argument('checkpath', metavar='P', type=str,
+    parser.add_argument('checkpaths', metavar='PATH', type=str, nargs='+',
                         help='path to the file or folder')
     parser.add_argument('-c', '--csv', metavar='X', type=str,
                         help='save bad files details on csv file %(metavar)s', dest='csv_filename')
@@ -339,6 +340,20 @@ def log_check_outcome(check_outcome_detail):
         1], ", size[bytes]:", check_outcome_detail[2])
 
 
+def gen_pathlist(path, CONFIG):
+    if os.path.isfile(path):
+        yield path
+        return
+
+    for root, sub_dirs, files in os.walk(path):
+        for filename in files:
+            if is_target_file(filename):
+                yield os.path.join(root, filename)
+
+        if not CONFIG.is_recurse:
+            break  # we only check the root folder
+
+
 def worker(in_queue, out_queue, CONFIG):
     try:
         while True:
@@ -364,19 +379,19 @@ def main():
 
     CONFIG = arg_parser()
     setup(CONFIG)
-    check_path = CONFIG.checkpath
+    check_paths = CONFIG.checkpaths
 
-    print("Files integrity check for:", check_path)
+    print("Files integrity check for:", ', '.join(check_paths))
 
-    if os.path.isfile(check_path):
+    if len(check_paths) == 1 and os.path.isfile(check_paths[0]):
         # manage single file check
-        is_success = check_file(check_path, CONFIG.error_detect)
+        is_success = check_file(check_paths[0], CONFIG.error_detect)
         if not is_success[0]:
             check_outcome_detail = is_success[1]
             log_check_outcome(check_outcome_detail)
             sys.exit(1)
         else:
-            print("File", check_path, "is OK")
+            print("File", check_paths[0], "is OK")
             sys.exit(0)
 
     # manage folder (searches media files into)
@@ -392,21 +407,10 @@ def main():
     out_queue = Queue()
     pre_count = 0
 
-    for root, sub_dirs, files in os.walk(check_path):
-        
-        media_files = []
-        for filename in files:
-            if is_target_file(filename):
-                media_files.append(filename)
-
-        pre_count += len(media_files)
-
-        for filename in media_files:
-            full_filename = os.path.join(root, filename)
-            task_queue.put(full_filename)
-
-        if not CONFIG.is_recurse:
-            break  # we only check the root folder
+    path_iter = itertools.chain.from_iterable(gen_pathlist(p, CONFIG) for p in check_paths)
+    for path in path_iter:
+        pre_count += 1
+        task_queue.put(path)
 
     for i in range(CONFIG.threads):
         p = Process(target=worker, args=(task_queue, out_queue, CONFIG))
